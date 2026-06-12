@@ -1,0 +1,244 @@
+# ── Flowerogate K8s Deployment ──
+# Stateless, horizontally scalable. All state in Redis.
+#
+# Apply:
+#   kubectl apply -f k8s/
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flowerogate-config
+  namespace: default
+data:
+  application-prod.yaml: |
+    server:
+      port: "8080"
+      shutdown: graceful
+    spring:
+      lifecycle:
+        timeout-per-shutdown-phase: "30"
+      cloud:
+        gateway:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "${CORS_ALLOWED_ORIGINS}"
+                allowedMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+                allowedHeaders: "Authorization,Content-Type,X-API-Key,X-Request-ID"
+                allowCredentials: true
+      security:
+        oauth2:
+          resourceserver:
+            jwt:
+              issuer-uri: "${JWT_ISSUER_URI}"
+              jwk-set-uri: "${JWT_JWK_SET_URI}"
+      data:
+        redis:
+          host: "${REDIS_HOST}"
+          port: "${REDIS_PORT}"
+    eureka:
+      client:
+        enabled: true
+        service-url:
+          defaultZone: "${EUREKA_URI}"
+    management:
+      server:
+        port: "8081"
+      endpoints:
+        web:
+          exposure:
+            include: health,info,prometheus,gateway
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+    resilience4j:
+      circuitbreaker:
+        configs:
+          default:
+            sliding-window-size: 20
+            failure-rate-threshold: 50
+            wait-duration-in-open-state: 10s
+            permitted-number-of-calls-in-half-open-state: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flowerogate
+  namespace: default
+  labels:
+    app: flowerogate
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: management
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+  selector:
+    app: flowerogate
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flowerogate
+  namespace: default
+  labels:
+    app: flowerogate
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: flowerogate
+  template:
+    metadata:
+      labels:
+        app: flowerogate
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      # ── Anti-affinity: spread pods across nodes ──
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: flowerogate
+                topologyKey: kubernetes.io/hostname
+
+      terminationGracePeriodSeconds: 35
+
+      containers:
+        - name: flowerogate
+          image: flowerogate:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 8081
+              protocol: TCP
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: JWT_ISSUER_URI
+              valueFrom:
+                secretKeyRef:
+                  name: flowerogate-secrets
+                  key: jwt-issuer-uri
+            - name: JWT_JWK_SET_URI
+              valueFrom:
+                secretKeyRef:
+                  name: flowerogate-secrets
+                  key: jwt-jwk-set-uri
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: EUREKA_URI
+              value: "http://eureka:8761/eureka"
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+
+          # ── Liveness: is the process alive? ──
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # ── Readiness: is the gateway ready for traffic? ──
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# ── Horizontal Pod Autoscaler ──
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flowerogate-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: flowerogate
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# ── PodDisruptionBudget ──
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flowerogate-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: flowerogate

@@ -1,0 +1,67 @@
+# ── Production profile ──
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${CORS_ALLOWED_ORIGINS:https://app.example.com}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          jwk-set-uri: ${JWT_JWK_SET_URI}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+      lettuce:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 8
+          max-wait: 2s
+
+eureka:
+  client:
+    enabled: true
+    service-url:
+      defaultZone: ${EUREKA_URI:http://eureka:8761/eureka}
+    registry-fetch-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,gateway
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    export:
+      otlp:
+        enabled: ${OTLP_ENABLED:true}
+        endpoint: ${OTLP_ENDPOINT:http://otel-collector:4318/v1/metrics}
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:0.1}
+
+logging:
+  pattern:
+    console: "{\"timestamp\":\"%d{yyyy-MM-dd HH:mm:ss.SSS}\",\"level\":\"%-5level\",\"logger\":\"%logger{36}\",\"thread\":\"%thread\",\"traceId\":\"%X{traceId:-}\",\"spanId\":\"%X{spanId:-}\",\"message\":\"%msg\"}%n"
+  level:
+    root: WARN
+    panomete.flowerogate: INFO
+    org.springframework.cloud.gateway: INFO

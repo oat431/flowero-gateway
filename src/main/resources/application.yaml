@@ -1,0 +1,252 @@
+# ═══════════════════════════════════════════════════════════════
+#  Flowerogate — Spring Cloud Gateway (Boot 4 / Cloud 2025.x)
+# ═══════════════════════════════════════════════════════════════
+
+server:
+  port: 8080
+  shutdown: graceful
+  netty:
+    connection-timeout: 30s
+
+spring:
+  application:
+    name: flowerogate
+
+  # ── Graceful shutdown ──
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # ── Don't start Eureka unless profile activates it ──
+  cloud:
+    gateway:
+      # ── Global CORS ──
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "https://app.example.com"
+            allowedMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            allowedHeaders: "Authorization,Content-Type,X-API-Key,X-Request-ID"
+            exposedHeaders: "X-Trace-Id,X-RateLimit-Remaining,X-RateLimit-Replenish-Rate,X-RateLimit-Burst-Capacity"
+            allowCredentials: true
+            maxAge: 3600
+
+      # ── HTTP Client (Netty) ──
+      httpclient:
+        response-timeout: 30s
+        connect-timeout: 5000
+        max-header-size: 16KB
+        max-initial-line-length: 8KB
+
+      # ── Routes ──
+      routes:
+        # ── Auth Service ──
+        - id: auth-service
+          uri: lb://auth-service
+          order: 10
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - AddRequestHeader=X-Gateway-Route,auth-service
+
+        # ── User Service ──
+        - id: user-service
+          uri: lb://user-service
+          order: 20
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - AddRequestHeader=X-Gateway-Route,user-service
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                redis-rate-limiter.requestedTokens: 1
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                fallbackUri: forward:/fallback/user-service
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
+                methods: GET
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
+
+        # ── Order Service ──
+        - id: order-service
+          uri: lb://order-service
+          order: 30
+          predicates:
+            - Path=/api/v1/orders/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - AddRequestHeader=X-Gateway-Route,order-service
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 80
+                redis-rate-limiter.burstCapacity: 150
+            - name: CircuitBreaker
+              args:
+                name: orderServiceCircuitBreaker
+                fallbackUri: forward:/fallback/order-service
+
+        # ── Product Service ──
+        - id: product-service
+          uri: lb://product-service
+          order: 40
+          predicates:
+            - Path=/api/v1/products/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - AddRequestHeader=X-Gateway-Route,product-service
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 150
+                redis-rate-limiter.burstCapacity: 300
+            - name: CircuitBreaker
+              args:
+                name: productServiceCircuitBreaker
+                fallbackUri: forward:/fallback/product-service
+
+        # ── Public endpoints (no auth required) ──
+        - id: public-api
+          uri: lb://public-service
+          order: 5
+          predicates:
+            - Path=/api/v1/public/**
+          filters:
+            - StripPrefix=1
+            - AddRequestHeader=X-Gateway-Route,public-service
+
+        # ── WebSocket routes ──
+        - id: websocket-service
+          uri: lb:ws://websocket-service
+          order: 50
+          predicates:
+            - Path=/ws/**
+
+        # ── Catch-all (standardized 404) ──
+        - id: fallback-404
+          uri: forward:/fallback/not-found
+          order: 9999
+          predicates:
+            - Path=/**
+
+    # ── LoadBalancer ──
+    loadbalancer:
+      enabled: true
+      ribbon:
+        enabled: false   # explicitly disable deprecated Ribbon
+
+  # ── Security: OAuth2 Resource Server (JWT) ──
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://auth.example.com/realms/flowerogate
+          jwk-set-uri: https://auth.example.com/realms/flowerogate/protocol/openid-connect/certs
+
+  # ── Redis (reactive, for rate limiting) ──
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+          max-wait: 2s
+
+  # ── Codec (request size limit) ──
+  codec:
+    max-in-memory-size: 10MB
+
+# ═══════════════════════════════════════════════════════════════
+#  Actuator (separate management port)
+# ═══════════════════════════════════════════════════════════════
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,gateway,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+      otlp:
+        enabled: false
+  tracing:
+    sampling:
+      probability: 1.0
+  observations:
+    key-values:
+      application: flowerogate
+
+# ═══════════════════════════════════════════════════════════════
+#  Resilience4j Circuit Breaker
+# ═══════════════════════════════════════════════════════════════
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        sliding-window-type: COUNT_BASED
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+    instances:
+      userServiceCircuitBreaker:
+        base-config: default
+      orderServiceCircuitBreaker:
+        base-config: default
+      productServiceCircuitBreaker:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 30s
+
+# ═══════════════════════════════════════════════════════════════
+#  Eureka (disabled by default — enable via profile)
+# ═══════════════════════════════════════════════════════════════
+eureka:
+  client:
+    enabled: false
+
+# ═══════════════════════════════════════════════════════════════
+#  Logging — structured JSON in production
+# ═══════════════════════════════════════════════════════════════
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    panomete.flowerogate: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.security: DEBUG
+    io.github.resilience4j: DEBUG

@@ -1,0 +1,41 @@
+# ── Test profile ──
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: test-route
+          uri: ${wiremock.uri:http://localhost:8090}
+          order: 0
+          predicates:
+            - Path=/api/v1/test/**
+          filters:
+            - StripPrefix=1
+
+    loadbalancer:
+      enabled: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9000/realms/test
+          jwk-set-uri: http://localhost:9000/realms/test/protocol/openid-connect/certs
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    panomete.flowerogate: DEBUG
+    org.springframework.cloud.gateway: DEBUG
