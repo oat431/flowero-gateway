@@ -4,6 +4,8 @@
 
 Boot 4.1.x · Spring Cloud 2025.1.x (Oakwood) · Security 7 · Netty · Redis · Java 25
 
+The gateway is following by this checklist: [spring boot api gateway](https://github.com/oat431/oralita_md/blob/main/project-checklist/spring-boot-api-gateway.md)
+
 ---
 
 ## Architecture
