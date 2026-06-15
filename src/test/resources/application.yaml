@@ -4,12 +4,20 @@ spring:
     gateway:
       routes:
         - id: test-route
-          uri: ${wiremock.uri:http://localhost:8090}
-          order: 0
+          uri: ${test.upstream.uri:http://localhost:18180}
+          order: 1
           predicates:
             - Path=/api/v1/test/**
           filters:
-            - StripPrefix=1
+            - StripPrefix=3
+            - RemoveRequestHeader=Authorization
+            - AddRequestHeader=X-Gateway-Route,echo-service
+
+        - id: fallback-404
+          uri: forward:/fallback/not-found
+          order: 9999
+          predicates:
+            - Path=/**
 
     loadbalancer:
       enabled: false
@@ -18,17 +26,18 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9000/realms/test
-          jwk-set-uri: http://localhost:9000/realms/test/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9000/realms/flowerogate
+          jwk-set-uri: http://localhost:9000/realms/flowerogate/protocol/openid-connect/certs
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: 6379
+      enabled: false
 
   autoconfigure:
     exclude:
       - org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration
 
 eureka:
   client:
