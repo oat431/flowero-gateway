@@ -38,111 +38,58 @@ spring:
         max-initial-line-length: 8KB
 
       # ── Routes ──
+      # Add routes below as your upstream services come online.
+      # The template shows every available filter — uncomment and customize.
       routes:
-        # ── Auth Service (login/register — rate limit by IP) ──
-        - id: auth-service
-          uri: lb://auth-service
-          order: 10
-          predicates:
-            - Path=/api/v1/auth/**
-          filters:
-            - StripPrefix=1
-            - RemoveRequestHeader=Authorization
-            - AddRequestHeader=X-Gateway-Route,auth-service
-            - name: RequestRateLimiter
-              args:
-                key-resolver: "#{@ipKeyResolver}"
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
 
-        # ── User Service ──
-        - id: user-service
-          uri: lb://user-service
-          order: 20
-          predicates:
-            - Path=/api/v1/users/**
-          filters:
-            - StripPrefix=1
-            - RemoveRequestHeader=Authorization
-            - AddRequestHeader=X-Gateway-Route,user-service
-            - name: RequestRateLimiter
-              args:
-                key-resolver: "#{@principalKeyResolver}"
-                redis-rate-limiter.replenishRate: 100
-                redis-rate-limiter.burstCapacity: 200
-                redis-rate-limiter.requestedTokens: 1
-            - name: CircuitBreaker
-              args:
-                name: userServiceCircuitBreaker
-                fallbackUri: forward:/fallback/user-service
-            - name: Retry
-              args:
-                retries: 3
-                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
-                methods: GET
-                backoff:
-                  firstBackoff: 50ms
-                  maxBackoff: 500ms
-                  factor: 2
-                  basedOnPreviousValue: false
+        # ── TEMPLATE: Authenticated service with full filter stack ──
+        # - id: my-service
+        #   uri: lb://my-service                     # or http://host:port
+        #   order: 10
+        #   predicates:
+        #     - Path=/api/v1/my-service/**
+        #     # - Method=GET,POST                    # optional: restrict methods
+        #     # - Header=X-Version,v2                # optional: version routing
+        #   filters:
+        #     - StripPrefix=1                        # strips /api/v1/my-service
+        #     - RemoveRequestHeader=Authorization    # never forward raw JWT
+        #     - AddRequestHeader=X-Gateway-Route,my-service
+        #     - name: RequestRateLimiter             # Redis-backed rate limiting
+        #       args:
+        #         key-resolver: "#{@principalKeyResolver}"  # or @ipKeyResolver, @apiKeyResolver
+        #         redis-rate-limiter.replenishRate: 100
+        #         redis-rate-limiter.burstCapacity: 200
+        #         redis-rate-limiter.requestedTokens: 1
+        #     - name: CircuitBreaker                 # Resilience4j
+        #       args:
+        #         name: myServiceCircuitBreaker
+        #         fallbackUri: forward:/fallback/my-service
+        #     - name: Retry                         # GET-only retry on transient errors
+        #       args:
+        #         retries: 3
+        #         statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
+        #         methods: GET
+        #         backoff:
+        #           firstBackoff: 50ms
+        #           maxBackoff: 500ms
+        #           factor: 2
+        #           basedOnPreviousValue: false
 
-        # ── Order Service ──
-        - id: order-service
-          uri: lb://order-service
-          order: 30
-          predicates:
-            - Path=/api/v1/orders/**
-          filters:
-            - StripPrefix=1
-            - RemoveRequestHeader=Authorization
-            - AddRequestHeader=X-Gateway-Route,order-service
-            - name: RequestRateLimiter
-              args:
-                key-resolver: "#{@principalKeyResolver}"
-                redis-rate-limiter.replenishRate: 80
-                redis-rate-limiter.burstCapacity: 150
-            - name: CircuitBreaker
-              args:
-                name: orderServiceCircuitBreaker
-                fallbackUri: forward:/fallback/order-service
+        # ── TEMPLATE: Public/no-auth endpoint ──
+        # - id: public-api
+        #   uri: lb://public-service
+        #   order: 5
+        #   predicates:
+        #     - Path=/api/v1/public/**
+        #   filters:
+        #     - StripPrefix=1
 
-        # ── Product Service ──
-        - id: product-service
-          uri: lb://product-service
-          order: 40
-          predicates:
-            - Path=/api/v1/products/**
-          filters:
-            - StripPrefix=1
-            - RemoveRequestHeader=Authorization
-            - AddRequestHeader=X-Gateway-Route,product-service
-            - name: RequestRateLimiter
-              args:
-                key-resolver: "#{@principalKeyResolver}"
-                redis-rate-limiter.replenishRate: 150
-                redis-rate-limiter.burstCapacity: 300
-            - name: CircuitBreaker
-              args:
-                name: productServiceCircuitBreaker
-                fallbackUri: forward:/fallback/product-service
-
-        # ── Public endpoints (no auth required) ──
-        - id: public-api
-          uri: lb://public-service
-          order: 5
-          predicates:
-            - Path=/api/v1/public/**
-          filters:
-            - StripPrefix=1
-            - AddRequestHeader=X-Gateway-Route,public-service
-
-        # ── WebSocket routes ──
-        - id: websocket-service
-          uri: lb:ws://websocket-service
-          order: 50
-          predicates:
-            - Path=/ws/**
+        # ── TEMPLATE: WebSocket route ──
+        # - id: websocket-service
+        #   uri: lb:ws://websocket-service
+        #   order: 50
+        #   predicates:
+        #     - Path=/ws/**
 
         # ── Catch-all (standardized 404) ──
         - id: fallback-404
@@ -230,12 +177,9 @@ resilience4j:
         record-exceptions:
           - org.springframework.web.reactive.function.client.WebClientResponseException
     instances:
-      userServiceCircuitBreaker:
-        base-config: default
-      orderServiceCircuitBreaker:
-        base-config: default
-      productServiceCircuitBreaker:
-        base-config: default
+      # Add instances here as you enable CircuitBreaker filters in routes above:
+      # myServiceCircuitBreaker:
+      #   base-config: default
   timelimiter:
     configs:
       default:
