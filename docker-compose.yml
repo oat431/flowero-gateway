@@ -1,7 +1,9 @@
 services:
   gateway:
-    build: .
-    image: flowerogate:latest
+    # Pull from Docker Hub after local build + push:
+    #   docker build -t panomete/flowerogate:latest .
+    #   docker push panomete/flowerogate:latest
+    image: panomete/flowerogate:latest
     container_name: flowerogate
     restart: unless-stopped
     ports:
