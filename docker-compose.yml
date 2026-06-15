@@ -26,6 +26,9 @@ services:
       REDIS_PASSWORD: ***
       REDIS_SSL: "false"
 
+      # ── Resilience4j (disabled — no circuit breaker instances configured) ──
+      SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JAutoConfiguration
+
       # ── Eureka (disabled — no service registry yet) ──
       EUREKA_CLIENT_ENABLED: "false"
 
