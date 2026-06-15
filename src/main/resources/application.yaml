@@ -176,7 +176,7 @@ resilience4j:
         automatic-transition-from-open-to-half-open-enabled: true
         record-exceptions:
           - org.springframework.web.reactive.function.client.WebClientResponseException
-    instances:
+    instances: {}
       # Add instances here as you enable CircuitBreaker filters in routes above:
       # myServiceCircuitBreaker:
       #   base-config: default
