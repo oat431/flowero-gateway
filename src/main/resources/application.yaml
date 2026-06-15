@@ -162,29 +162,28 @@ management:
       application: flowerogate
 
 # ═══════════════════════════════════════════════════════════════
-#  Resilience4j Circuit Breaker
+#  Resilience4j Circuit Breaker (disabled — no services yet)
+#  Uncomment when you have upstream services to protect.
 # ═══════════════════════════════════════════════════════════════
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-size: 20
-        sliding-window-type: COUNT_BASED
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 5
-        automatic-transition-from-open-to-half-open-enabled: true
-        record-exceptions:
-          - org.springframework.web.reactive.function.client.WebClientResponseException
-    # ── Circuit breaker instances — uncomment and add entries ──
-    # instances:
-    #   myServiceCircuitBreaker:
-    #     base-config: default
-    instances: {}
-  timelimiter:
-    configs:
-      default:
-        timeout-duration: 30s
+# resilience4j:
+#   circuitbreaker:
+#     configs:
+#       default:
+#         sliding-window-size: 20
+#         sliding-window-type: COUNT_BASED
+#         failure-rate-threshold: 50
+#         wait-duration-in-open-state: 10s
+#         permitted-number-of-calls-in-half-open-state: 5
+#         automatic-transition-from-open-to-half-open-enabled: true
+#         record-exceptions:
+#           - org.springframework.web.reactive.function.client.WebClientResponseException
+#     instances:
+#       myServiceCircuitBreaker:
+#         base-config: default
+#   timelimiter:
+#     configs:
+#       default:
+#         timeout-duration: 30s
 
 # ═══════════════════════════════════════════════════════════════
 #  Eureka (disabled by default — enable via profile)
