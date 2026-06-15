@@ -149,12 +149,13 @@ spring:
         enabled: false   # explicitly disable deprecated Ribbon
 
   # ── Security: OAuth2 Resource Server (JWT) ──
+  # Override per-profile (dev uses localhost:9000, prod uses env vars)
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://auth.example.com/realms/flowerogate
-          jwk-set-uri: https://auth.example.com/realms/flowerogate/protocol/openid-connect/certs
+          issuer-uri: https://auth.panomete.com/realms/flowerogate
+          jwk-set-uri: https://auth.panomete.com/realms/flowerogate/protocol/openid-connect/certs
 
   # ── Redis (reactive, for rate limiting) ──
   data:

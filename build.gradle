@@ -30,8 +30,8 @@ dependencies {
 
     // ── Security (reactive — Security 7 / Boot 4) ──
     implementation 'org.springframework.boot:spring-boot-starter-security'
-    // OAuth2 Resource Server — uncomment when you have a JWT issuer:
-    // implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // OAuth2 Resource Server — JWT validation via Keycloak
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     // ── Redis (reactive, for rate limiting) ──
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
