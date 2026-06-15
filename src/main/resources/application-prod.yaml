@@ -43,6 +43,8 @@ eureka:
     initial-instance-info-replication-interval-seconds: 10
 
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:-1}
   endpoints:
     web:
       exposure:

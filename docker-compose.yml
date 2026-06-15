@@ -5,9 +5,12 @@ services:
     container_name: flowerogate
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"     # API gateway (nginx proxies this)
-      - "127.0.0.1:8081:8081"     # Actuator / management (keep internal)
+      - "127.0.0.1:8000:8000"     # API gateway (nginx proxies this)
     environment:
+      # ── Server ──
+      SERVER_PORT: "8000"
+      MANAGEMENT_SERVER_PORT: "-1"    # actuator on same port
+
       # ── Spring profile ──
       SPRING_PROFILES_ACTIVE: prod
 
@@ -32,7 +35,6 @@ services:
       LOGGING_LEVEL_PANOMETE_FLOWEROGATE: DEBUG
 
       # ── Body logging on 5xx (opt-in) ──
-      # Uncomment to enable:
       # GATEWAY_LOGGING_LOG_BODIES_ON_ERROR: "true"
 
     extra_hosts:
@@ -48,7 +50,7 @@ services:
 
     # ── Health check ──
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health/liveness || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/actuator/health/liveness || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
