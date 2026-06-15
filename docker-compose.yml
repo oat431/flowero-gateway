@@ -11,7 +11,7 @@ services:
     environment:
       # ── Server ──
       SERVER_PORT: "8000"
-      # MANAGEMENT_SERVER_PORT intentionally unset — shares main port 8000
+      MANAGEMENT_SERVER_PORT: "8000"    # shares main port (override old JAR default)
 
       # ── Spring profile ──
       SPRING_PROFILES_ACTIVE: prod
