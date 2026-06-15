@@ -19,12 +19,15 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:redis}
+      host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       ssl:
         enabled: ${REDIS_SSL:false}
+      timeout: 2s
+      connect-timeout: 1s
       lettuce:
+        shutdown-timeout: 100ms
         pool:
           max-active: 32
           max-idle: 16
@@ -43,10 +46,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,gateway
+        include: health,info,prometheus,gateway,metrics
   endpoint:
     health:
-      show-details: never
+      show-details: when-authorized
+      probes:
+        enabled: true
   metrics:
     export:
       otlp:
