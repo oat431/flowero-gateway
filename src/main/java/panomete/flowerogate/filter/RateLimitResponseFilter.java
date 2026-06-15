@@ -46,14 +46,31 @@ public class RateLimitResponseFilter implements WebFilter, Ordered {
     private Mono<Void> writeRateLimitBody(ServerWebExchange exchange) {
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
+        // Read rate-limit headers set by RequestRateLimiter filter
+        String remaining = exchange.getResponse().getHeaders()
+                .getFirst("X-RateLimit-Remaining");
+        String replenishRate = exchange.getResponse().getHeaders()
+                .getFirst("X-RateLimit-Replenish-Rate");
+        String burstCapacity = exchange.getResponse().getHeaders()
+                .getFirst("X-RateLimit-Burst-Capacity");
+
         String body = """
                 {
                   "error": "Too Many Requests",
                   "status": 429,
                   "message": "Rate limit exceeded. Please reduce request frequency.",
-                  "path": "%s"
+                  "path": "%s",
+                  "rateLimit": {
+                    "remaining": %s,
+                    "replenishRate": %s,
+                    "burstCapacity": %s
+                  }
                 }
-                """.formatted(exchange.getRequest().getURI().getPath());
+                """.formatted(
+                exchange.getRequest().getURI().getPath(),
+                remaining != null ? remaining : "0",
+                replenishRate != null ? replenishRate : "null",
+                burstCapacity != null ? burstCapacity : "null");
 
         DataBuffer buffer = exchange.getResponse()
                 .bufferFactory()
