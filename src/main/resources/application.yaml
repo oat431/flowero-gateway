@@ -45,7 +45,7 @@ spring:
 
         # ── Fluffy Mouton (URL Shortener) ──
         - id: route-shortlink
-          uri: lb://shortlink-service
+          uri: http://shortlink-service:8080
           predicates:
             - Path=/api/v1/short/**
           filters:
