@@ -43,6 +43,14 @@ spring:
       # The template shows every available filter — uncomment and customize.
       routes:
 
+        # ── Fluffy Mouton (URL Shortener) ──
+        - id: route-shortlink
+          uri: lb://shortlink-service
+          predicates:
+            - Path=/api/v1/short/**
+          filters:
+            - RemoveRequestHeader=Authorization
+
         # ── TEMPLATE: Authenticated service with full filter stack ──
         # - id: my-service
         #   uri: lb://my-service                     # or http://host:port
