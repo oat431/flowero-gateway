@@ -53,8 +53,6 @@ public class SecurityConfig {
                         .authenticationSuccessHandler((webFilterExchange, authentication) ->
                             webFilterExchange.getExchange().getSession()
                                 .map(session -> {
-                                    // Use redirect_uri from session (set by OAuth2RedirectParamFilter),
-                                    // or fall back to the configured default.
                                     String redirectUrl = (String) session.getAttributes()
                                         .getOrDefault("OAUTH2_POST_LOGIN_REDIRECT", postLoginRedirectUrl);
                                     var response = webFilterExchange.getExchange().getResponse();
@@ -64,6 +62,21 @@ public class SecurityConfig {
                                 })
                                 .then()
                         )
+                        // For XHR/API requests: return 401 JSON instead of 302 redirect.
+                        // Browser navigation (Accept: text/html) still gets the redirect.
+                        .authenticationEntryPoint((exchange, ex) -> {
+                            var headers = exchange.getRequest().getHeaders();
+                            var accept = headers.getFirst("Accept");
+                            if (accept != null && accept.contains("text/html")) {
+                                // Browser: redirect to Keycloak
+                                exchange.getResponse().setStatusCode(HttpStatus.FOUND);
+                                exchange.getResponse().getHeaders()
+                                    .setLocation(URI.create("/oauth2/authorization/keycloak"));
+                                return Mono.empty();
+                            }
+                            // API/XHR: return 401 JSON
+                            return authenticationEntryPoint().commence(exchange, ex);
+                        })
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(org.springframework.security.config.Customizer.withDefaults())
