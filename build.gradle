@@ -32,6 +32,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     // OAuth2 Resource Server — JWT validation via Keycloak
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    // OAuth2 Client — browser login redirect flow
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 
     // ── Redis (reactive, for rate limiting) ──
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'

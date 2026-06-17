@@ -26,12 +26,15 @@ public class SecurityConfig {
                 .authorizeExchange(auth -> auth
                         .pathMatchers(
                                 "/actuator/**",
+                                "/login/**",
+                                "/oauth2/**",
                                 "/api/v1/public/**",
                                 "/api/v1/auth/**",
                                 "/fallback/**"
                         ).permitAll()
                         .anyExchange().authenticated()
                 )
+                .oauth2Login(org.springframework.security.config.Customizer.withDefaults())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(org.springframework.security.config.Customizer.withDefaults())
                         .authenticationEntryPoint(authenticationEntryPoint())
