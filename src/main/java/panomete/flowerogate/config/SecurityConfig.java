@@ -62,26 +62,24 @@ public class SecurityConfig {
                                 })
                                 .then()
                         )
-                        // For XHR/API requests: return 401 JSON instead of 302 redirect.
-                        // Browser navigation (Accept: text/html) still gets the redirect.
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(org.springframework.security.config.Customizer.withDefaults())
+                        .accessDeniedHandler(accessDeniedHandler())
+                )
+                .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((exchange, ex) -> {
-                            var headers = exchange.getRequest().getHeaders();
-                            var accept = headers.getFirst("Accept");
+                            // Browser navigation: redirect to Keycloak
+                            // API/XHR: return 401 JSON (no 302 → no CORS redirect block)
+                            var accept = exchange.getRequest().getHeaders().getFirst("Accept");
                             if (accept != null && accept.contains("text/html")) {
-                                // Browser: redirect to Keycloak
                                 exchange.getResponse().setStatusCode(HttpStatus.FOUND);
                                 exchange.getResponse().getHeaders()
                                     .setLocation(URI.create("/oauth2/authorization/keycloak"));
                                 return Mono.empty();
                             }
-                            // API/XHR: return 401 JSON
                             return authenticationEntryPoint().commence(exchange, ex);
                         })
-                )
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(org.springframework.security.config.Customizer.withDefaults())
-                        .authenticationEntryPoint(authenticationEntryPoint())
-                        .accessDeniedHandler(accessDeniedHandler())
                 )
                 .build();
     }
