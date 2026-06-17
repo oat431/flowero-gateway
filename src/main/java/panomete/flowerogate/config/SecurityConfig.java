@@ -1,5 +1,6 @@
 package panomete.flowerogate.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -12,12 +13,16 @@ import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
+
+    @Value("${app.post-login-redirect-url:https://short.panomete.com/short-link}")
+    private String postLoginRedirectUrl;
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
@@ -34,7 +39,22 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyExchange().authenticated()
                 )
-                .oauth2Login(org.springframework.security.config.Customizer.withDefaults())
+                .oauth2Login(oauth2 -> oauth2
+                        .authenticationSuccessHandler((webFilterExchange, authentication) ->
+                            webFilterExchange.getExchange().getSession()
+                                .map(session -> {
+                                    // Use redirect_uri from session (set by OAuth2RedirectParamFilter),
+                                    // or fall back to the configured default.
+                                    String redirectUrl = (String) session.getAttributes()
+                                        .getOrDefault("OAUTH2_POST_LOGIN_REDIRECT", postLoginRedirectUrl);
+                                    var response = webFilterExchange.getExchange().getResponse();
+                                    response.setStatusCode(HttpStatus.FOUND);
+                                    response.getHeaders().setLocation(URI.create(redirectUrl));
+                                    return response;
+                                })
+                                .then()
+                        )
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(org.springframework.security.config.Customizer.withDefaults())
                         .authenticationEntryPoint(authenticationEntryPoint())
