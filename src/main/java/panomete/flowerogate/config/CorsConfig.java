@@ -1,25 +1,25 @@
 package panomete.flowerogate.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import org.springframework.web.cors.CorsConfiguration;
 
+import java.util.Arrays;
 import java.util.List;
 
-/**
- * Programmatic CORS fallback — the primary CORS config lives in
- * {@code spring.cloud.gateway.globalcors} in {@code application.yaml}.
- * This bean serves as a backup and for non-gateway routes (e.g., /fallback/**).
- */
 @Configuration
 public class CorsConfig {
+
+    @Value("${cors.allowed-origins:https://short.panomete.com,https://gateway.panomete.com}")
+    private String allowedOriginsRaw;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("https://app.example.com"));
+        config.setAllowedOrigins(Arrays.asList(allowedOriginsRaw.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Request-ID"));
         config.setExposedHeaders(List.of(

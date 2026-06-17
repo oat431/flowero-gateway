@@ -11,28 +11,33 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
-import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
-import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
 
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
-    @Value("${app.post-login-redirect-url:https://short.panomete.com/short-link}")
+    private final org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource;
+
+    public SecurityConfig(
+            @Value("${app.post-login-redirect-url:https://short.panomete.com/short-link}") String postLoginRedirectUrl,
+            org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource) {
+        this.postLoginRedirectUrl = postLoginRedirectUrl;
+        this.corsConfigurationSource = corsConfigurationSource;
+    }
+
     private String postLoginRedirectUrl;
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeExchange(auth -> auth
                         .pathMatchers(
                                 "/actuator/**",
@@ -67,27 +72,6 @@ public class SecurityConfig {
                 )
                 .build();
     }
-
-    /**
-     * CORS configuration for local dev and known frontends.
-     * Reads allowed origins from {@code CORS_ALLOWED_ORIGINS} env var.
-     */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        var config = new CorsConfiguration();
-        config.setAllowedOrigins(java.util.Arrays.asList(allowedOriginsRaw.split(",")));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-        config.setAllowCredentials(true);
-        config.setMaxAge(3600L);
-
-        var source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        return source;
-    }
-
-    @Value("${cors.allowed-origins:https://short.panomete.com,https://gateway.panomete.com}")
-    private String allowedOriginsRaw;
 
     /**
      * Returns standardized JSON for 401 (no token / invalid token).
