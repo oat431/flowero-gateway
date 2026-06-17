@@ -12,6 +12,8 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
 import org.springframework.security.web.server.authorization.ServerAccessDeniedHandler;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.server.session.CookieWebSessionIdResolver;
+import org.springframework.web.server.session.WebSessionIdResolver;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -32,6 +34,21 @@ public class SecurityConfig {
     }
 
     private String postLoginRedirectUrl;
+
+    /**
+     * Configure session cookie for cross-origin use (SameSite=None; Secure).
+     * Required so the frontend on a different origin can send the session cookie.
+     */
+    @Bean
+    public WebSessionIdResolver webSessionIdResolver() {
+        CookieWebSessionIdResolver resolver = new CookieWebSessionIdResolver();
+        resolver.addCookieInitializer(builder -> builder
+            .sameSite("None")
+            .secure(true)
+            .path("/")
+        );
+        return resolver;
+    }
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
