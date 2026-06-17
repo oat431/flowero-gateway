@@ -5,6 +5,7 @@
 server:
   port: 8080
   shutdown: graceful
+  forward-headers-strategy: native
   netty:
     connection-timeout: 30s
 
