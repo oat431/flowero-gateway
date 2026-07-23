@@ -11,7 +11,7 @@ server:
 
 spring:
   application:
-    name: flowerogate
+    name: flowero-gate
 
   # ── Graceful shutdown ──
   lifecycle:
@@ -24,7 +24,7 @@ spring:
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: "https://app.example.com"
+            allowedOrigins: "https://*.panomete.com"
             allowedMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
             allowedHeaders: "Authorization,Content-Type,X-API-Key,X-Request-ID"
             exposedHeaders: "X-Trace-Id,X-RateLimit-Remaining,X-RateLimit-Replenish-Rate,X-RateLimit-Burst-Capacity"
@@ -39,41 +39,91 @@ spring:
         max-initial-line-length: 8KB
 
       # ── Routes ──
-      # Add routes below as your upstream services come online.
-      # The template shows every available filter — uncomment and customize.
+      # All business API routes follow the /api/{service}/** pattern.
+      # StripPrefix=1 removes /api before forwarding to the backend.
+      # Authentication and rate limiting are applied globally.
       routes:
 
-        # ── Fluffy Mouton (URL Shortener) ──
-        - id: route-shortlink
-          uri: http://shortlink-service:8080
+        # ── Cute Gufo (Blog) ──
+        - id: blog
+          uri: lb://cute-gufo
           predicates:
-            - Path=/api/v1/short/**
+            - Path=/api/blog/**
           filters:
+            - StripPrefix=1
             - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+
+        # ── Fluffy Mouton (URL Shortener) ──
+        - id: short
+          uri: lb://fluffy-mouton
+          predicates:
+            - Path=/api/short/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+
+        # ── Tiny Mchwa (Todo) ──
+        - id: todo
+          uri: lb://tiny-mchwa
+          predicates:
+            - Path=/api/todo/**
+          filters:
+            - StripPrefix=1
+            - RemoveRequestHeader=Authorization
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@ipKeyResolver}"
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+
+        # ── Future routes (Phase 2+) ──
+        # - id: ledger
+        #   uri: lb://big-schwein
+        #   predicates: [Path=/api/ledger/**]
+        #   filters:
+        #     - StripPrefix=1
+        #
+        # - id: recipe
+        #   uri: lb://shy-ardilla
+        #   predicates: [Path=/api/recipe/**]
+        #   filters:
+        #     - StripPrefix=1
+        #
+        # - id: hora
+        #   uri: lb://white-jelen
+        #   predicates: [Path=/api/hora/**]
+        #   filters:
+        #     - StripPrefix=1
 
         # ── TEMPLATE: Authenticated service with full filter stack ──
         # - id: my-service
-        #   uri: lb://my-service                     # or http://host:port
+        #   uri: lb://my-service
         #   order: 10
         #   predicates:
         #     - Path=/api/v1/my-service/**
-        #     # - Method=GET,POST                    # optional: restrict methods
-        #     # - Header=X-Version,v2                # optional: version routing
         #   filters:
-        #     - StripPrefix=1                        # strips /api/v1/my-service
-        #     - RemoveRequestHeader=Authorization    # never forward raw JWT
-        #     - AddRequestHeader=X-Gateway-Route,my-service
-        #     - name: RequestRateLimiter             # Redis-backed rate limiting
+        #     - StripPrefix=1
+        #     - RemoveRequestHeader=Authorization
+        #     - name: RequestRateLimiter
         #       args:
-        #         key-resolver: "#{@principalKeyResolver}"  # or @ipKeyResolver, @apiKeyResolver
+        #         key-resolver: "#{@principalKeyResolver}"
         #         redis-rate-limiter.replenishRate: 100
         #         redis-rate-limiter.burstCapacity: 200
-        #         redis-rate-limiter.requestedTokens: 1
-        #     - name: CircuitBreaker                 # Resilience4j
+        #     - name: CircuitBreaker
         #       args:
         #         name: myServiceCircuitBreaker
         #         fallbackUri: forward:/fallback/my-service
-        #     - name: Retry                         # GET-only retry on transient errors
+        #     - name: Retry
         #       args:
         #         retries: 3
         #         statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
@@ -82,23 +132,6 @@ spring:
         #           firstBackoff: 50ms
         #           maxBackoff: 500ms
         #           factor: 2
-        #           basedOnPreviousValue: false
-
-        # ── TEMPLATE: Public/no-auth endpoint ──
-        # - id: public-api
-        #   uri: lb://public-service
-        #   order: 5
-        #   predicates:
-        #     - Path=/api/v1/public/**
-        #   filters:
-        #     - StripPrefix=1
-
-        # ── TEMPLATE: WebSocket route ──
-        # - id: websocket-service
-        #   uri: lb:ws://websocket-service
-        #   order: 50
-        #   predicates:
-        #     - Path=/ws/**
 
         # ── Catch-all (standardized 404) ──
         - id: fallback-404
@@ -119,8 +152,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://auth.panomete.com/realms/flowerogate
-          jwk-set-uri: https://auth.panomete.com/realms/flowerogate/protocol/openid-connect/certs
+          issuer-uri: https://auth.panomete.com/realms/panomete
+          jwk-set-uri: https://auth.panomete.com/realms/panomete/protocol/openid-connect/certs
 
   # ── Redis (reactive, for rate limiting) ──
   data:
@@ -168,7 +201,7 @@ management:
       probability: 1.0
   observations:
     key-values:
-      application: flowerogate
+      application: flowero-gate
 
 # ═══════════════════════════════════════════════════════════════
 #  Resilience4j Circuit Breaker (disabled — no services yet)

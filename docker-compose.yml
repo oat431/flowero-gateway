@@ -17,20 +17,21 @@ services:
       SPRING_PROFILES_ACTIVE: prod
 
       # ── OAuth2 / JWT ──
-      JWT_ISSUER_URI: https://auth.panomete.com/realms/flowerogate
-      JWT_JWK_SET_URI: https://auth.panomete.com/realms/flowerogate/protocol/openid-connect/certs
+      JWT_ISSUER_URI: https://auth.panomete.com/realms/panomete
+      JWT_JWK_SET_URI: https://auth.panomete.com/realms/panomete/protocol/openid-connect/certs
 
-      # ── Redis (native on host) ──
-      REDIS_HOST: host.docker.internal
+      # ── Redis / Valkey (shared container on db-network) ──
+      REDIS_HOST: local-valkey
       REDIS_PORT: "6379"
-      REDIS_PASSWORD: ***
+      REDIS_PASSWORD: ${VALKEY_PASSWORD}
       REDIS_SSL: "false"
 
       # ── Resilience4j (disabled — no circuit breaker instances configured) ──
       SPRING_AUTOCONFIGURE_EXCLUDE: org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JAutoConfiguration
 
-      # ── Eureka (disabled — no service registry yet) ──
-      EUREKA_CLIENT_ENABLED: "false"
+      # ── Eureka (enabled — service registry for lb:// resolution) ──
+      EUREKA_CLIENT_ENABLED: "true"
+      EUREKA_URI: http://flowero-discover:8999/eureka
 
       # ── OTLP (disabled — no collector yet) ──
       OTLP_ENABLED: "false"
@@ -42,8 +43,8 @@ services:
       # ── Body logging on 5xx (opt-in) ──
       # GATEWAY_LOGGING_LOG_BODIES_ON_ERROR: "true"
 
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - shared-network
 
     # ── Resource limits ──
     deploy:
@@ -60,3 +61,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+networks:
+  shared-network:
+    external: true
+    name: db-network

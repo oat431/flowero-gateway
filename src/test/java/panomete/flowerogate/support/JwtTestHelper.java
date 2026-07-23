@@ -64,7 +64,7 @@ public final class JwtTestHelper {
             Instant now = Instant.now();
             JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                     .subject(subject)
-                    .issuer("http://localhost:9000/realms/flowerogate")
+                    .issuer("http://localhost:9000/realms/panomete")
                     .audience("flowero-gateway")
                     .issueTime(Date.from(now))
                     .expirationTime(Date.from(now.plusSeconds(expirySecs)))

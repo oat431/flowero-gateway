@@ -14,8 +14,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9000/realms/flowerogate
-          jwk-set-uri: http://localhost:9000/realms/flowerogate/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9000/realms/panomete
+          jwk-set-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/certs
 
   data:
     redis:

@@ -13,13 +13,16 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    @Value("${cors.allowed-origins:https://short.panomete.com,https://gateway.panomete.com}")
+    @Value("${cors.allowed-origins:https://*.panomete.com}")
     private String allowedOriginsRaw;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList(allowedOriginsRaw.split(",")));
+        // Use allowedOriginPatterns for wildcard support (e.g. https://*.panomete.com)
+        Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .forEach(config::addAllowedOriginPattern);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Request-ID"));
         config.setExposedHeaders(List.of(

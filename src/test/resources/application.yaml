@@ -1,4 +1,7 @@
 # ── Test profile ──
+app:
+  post-login-redirect-url: https://panomete.com
+
 spring:
   cloud:
     gateway:
@@ -26,8 +29,24 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:9000/realms/flowerogate
-          jwk-set-uri: http://localhost:9000/realms/flowerogate/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9000/realms/panomete
+          jwk-set-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/certs
+      client:
+        registration:
+          keycloak:
+            client-id: flowero-gateway
+            client-secret: test-secret-do-not-use-in-prod
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,profile,email
+        provider:
+          keycloak:
+            # No issuer-uri — use explicit endpoints to avoid OIDC metadata fetch
+            authorization-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/auth
+            token-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/token
+            user-info-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/userinfo
+            jwk-set-uri: http://localhost:9000/realms/panomete/protocol/openid-connect/certs
+            user-name-attribute: preferred_username
 
   data:
     redis:

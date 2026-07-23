@@ -27,7 +27,7 @@ public class SecurityConfig {
     private final org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource;
 
     public SecurityConfig(
-            @Value("${app.post-login-redirect-url:https://short.panomete.com/short-link}") String postLoginRedirectUrl,
+            @Value("${app.post-login-redirect-url}") String postLoginRedirectUrl,
             org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource) {
         this.postLoginRedirectUrl = postLoginRedirectUrl;
         this.corsConfigurationSource = corsConfigurationSource;

@@ -23,7 +23,7 @@ public class ObservabilityConfig {
     @Bean
     public MeterFilter commonTagsMeterFilter() {
         return MeterFilter.commonTags(List.of(
-                Tag.of("application", "flowerogate"),
+                Tag.of("application", "flowero-gate"),
                 Tag.of("component", "api-gateway")));
     }
 }

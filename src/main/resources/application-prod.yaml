@@ -4,7 +4,7 @@ server:
   forward-headers-strategy: native
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://short.panomete.com,https://gateway.panomete.com}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:https://*.panomete.com}
 
 spring:
   security:
@@ -47,7 +47,7 @@ eureka:
   client:
     enabled: true
     service-url:
-      defaultZone: ${EUREKA_URI:http://eureka:8761/eureka}
+      defaultZone: ${EUREKA_URI:http://flowero-discover:8999/eureka}
     registry-fetch-interval-seconds: 30
     initial-instance-info-replication-interval-seconds: 10
 

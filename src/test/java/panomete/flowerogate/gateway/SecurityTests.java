@@ -43,7 +43,7 @@ class SecurityTests {
         authServer.start();
 
         // Serve JWK set endpoint (simulates Keycloak)
-        authServer.stubFor(get(urlEqualTo("/realms/flowerogate/protocol/openid-connect/certs"))
+        authServer.stubFor(get(urlEqualTo("/realms/panomete/protocol/openid-connect/certs"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
