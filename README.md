@@ -1,40 +1,33 @@
-# 🌸 Flowerogate
+# ⚙️ Flowero Gate
 
-**API Gateway powered by Spring Cloud Gateway** — reactive, secure, observable.
+**API Gateway for the Panomete Platform** — Spring Cloud Gateway, reactive, JWT-secured, Valkey rate-limited.
 
-Boot 4.1.x · Spring Cloud 2025.1.x (Oakwood) · Security 7 · Netty · Redis · Java 25
-
-The gateway is following by this checklist: [spring boot api gateway](https://github.com/oat431/oralita_md/blob/main/project-checklist/spring-boot-api-gateway.md)
+> Java 25 · Spring Boot 4.1.0 · Spring Cloud 2025.1.2 (Oakwood) · Netty · Valkey 9
 
 ---
 
 ## Architecture
 
 ```
-Client → [Flowerogate :8080] → lb://user-service
-                │               → lb://order-service
-                │               → lb://product-service
-                │               → lb://auth-service
-                │
-        [Management :8081]      ← Actuator / Prometheus / Health probes
-                │
-        [Redis]                 ← Rate limiting state
-        [Eureka]                ← Service discovery (optional)
-        [OTel Collector]        ← Traces + Metrics
+                        ┌─ JWT Validation ────── cached JWKS ← Keycloak (Guard)
+                        │
+                        ├─ Route Resolution ──── lb://cute-gufo        ← Eureka (Discover)
+  flowero-gate :8000 ───┤                       lb://fluffy-mouton
+                        │                       lb://tiny-mchwa
+                        │
+                        ├─ Rate Limiting ─────── Valkey 9 (fail-open)
+                        │
+                        └─ Structured Logging ── JSON → stdout
 ```
-
-### Request Pipeline
 
 ```
 Request
-  → TraceIdFilter          (0)     — W3C traceparent + X-Trace-Id
-  → SecurityWebFilterChain (10)    — JWT validation / CSRF / path auth
-  → RequestRateLimiter     (per-route) — Redis-backed token bucket
-  → Route Matching                 — Path, Method, Header predicates
-  → StripPrefix / Headers          — Path rewrite, header injection
-  → CircuitBreaker / Retry         — Resilience4j
-  → Upstream Service
-  → RequestLoggingFilter   (5000)  — Structured log (method, path, status, latency)
+  → TraceIdFilter            (0)      — W3C traceparent + X-Trace-Id
+  → SecurityWebFilterChain   (~10)    — JWT validation / CSRF / path auth
+  → RequestRateLimiter       (route)  — Valkey-backed token bucket, fail-open
+  → Route Matching                    — Path predicate → lb:// resolution
+  → StripPrefix / Headers             — Strip /api, forward X-User-Id, X-User-Roles
+  → RequestLoggingFilter     (5000)   — Structured JSON (method, path, status, latency)
   → Response
 ```
 
@@ -43,179 +36,126 @@ Request
 ## Quick Start
 
 ### Prerequisites
-- Java 25+
-- Gradle 9.5+
-- Redis (for rate limiting — optional in dev)
+
+- **JDK 25** ([Eclipse Temurin](https://adoptium.net/) recommended)
+- **Gradle** (wrapper included)
+- Valkey 9 (optional for local dev — rate limiting disabled without it)
 
 ### Build & Run
 
 ```bash
-# Build
+# Build (compile + test + package)
 ./gradlew build
 
-# Run (dev profile — Eureka disabled, debug logging)
+# Run locally (dev profile — port 8080, debug logging)
 ./gradlew bootRun --args='--spring.profiles.active=dev'
-
-# Or with JAR
-java -jar build/libs/flowerogate-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
 ```
 
 ### Docker
 
 ```bash
 # Build image
-docker build -t flowerogate:latest .
+docker build -t panomete/flowerogate:latest .
 
-# Run
-docker run -p 8080:8080 -p 8081:8081 \
-  -e SPRING_PROFILES_ACTIVE=dev \
-  flowerogate:latest
-
-# Or use Boot build-image (no Dockerfile needed)
-./gradlew bootBuildImage
+# Run with compose (joins db-network, connects to Valkey + Eureka + Keycloak)
+docker compose up -d
 ```
 
-### Kubernetes
+### Verify
 
 ```bash
-kubectl apply -f k8s/deployment.yaml
+# Health check
+curl http://localhost:8000/actuator/health
+# → {"status":"UP","components":{"discoveryComposite":{"status":"UP"},...}}
+
+# Protected route without JWT
+curl -o /dev/null -w '%{http_code}' http://localhost:8000/api/blog/posts
+# → 401
 ```
-
----
-
-## Configuration
-
-### Application Profiles
-
-| File | Purpose |
-|------|---------|
-| `application.yaml` | Base config — routes, CORS, circuit breaker, rate limiter, OTel |
-| `application-dev.yaml` | Local dev — debug logging, localhost origins, Eureka disabled |
-| `application-prod.yaml` | Production — env-var driven, structured JSON logging, Redis TLS |
-
-### Key Properties
-
-```yaml
-# Security
-spring.security.oauth2.resourceserver.jwt.issuer-uri=https://auth.example.com/realms/flowerogate
-
-# Redis (rate limiting)
-spring.data.redis.host=localhost
-spring.data.redis.port=6379
-
-# Eureka (service discovery)
-eureka.client.enabled=false
-eureka.client.service-url.defaultZone=http://eureka:8761/eureka
-```
-
-### Environment Variables (Production)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVER_PORT` | `8080` | Gateway listen port |
-| `JWT_ISSUER_URI` | — | OAuth2 issuer (required) |
-| `JWT_JWK_SET_URI` | — | JWK Set endpoint (required) |
-| `REDIS_HOST` | `redis` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | — | Redis password |
-| `EUREKA_URI` | `http://eureka:8761/eureka` | Eureka server URL |
-| `CORS_ALLOWED_ORIGINS` | `https://app.example.com` | Allowed CORS origins |
-| `OTLP_ENABLED` | `true` | Enable OTLP export |
-| `OTLP_ENDPOINT` | `http://otel-collector:4318/v1/metrics` | OTLP collector |
-| `TRACING_SAMPLE_RATE` | `0.1` | Trace sampling (0.0–1.0) |
 
 ---
 
 ## Routes
 
-All routes are defined in `application.yaml` under `spring.cloud.gateway.routes`.
+All routes defined in `application.yaml`. Path pattern: `/api/{service}/**` (no `v1` prefix).
 
-| Route | Path | Upstream | Auth | Rate Limit | Circuit Breaker |
-|-------|------|----------|------|------------|-----------------|
-| Auth Service | `/api/v1/auth/**` | `lb://auth-service` | Public (login/register) | — | — |
-| User Service | `/api/v1/users/**` | `lb://user-service` | JWT required | 100/200 tps | ✅ |
-| Order Service | `/api/v1/orders/**` | `lb://order-service` | JWT required | 80/150 tps | ✅ |
-| Product Service | `/api/v1/products/**` | `lb://product-service` | JWT required | 150/300 tps | ✅ |
-| Public API | `/api/v1/public/**` | `lb://public-service` | None | — | — |
-| WebSocket | `/ws/**` | `lb:ws://websocket-service` | — | — | — |
-| Catch-all | `/**` | `forward:/fallback/not-found` | — | — | — |
+| Route | Path | Backend (`lb://`) | Auth | Rate Limit |
+|-------|------|------------------|:---:|:---:|
+| Blog | `/api/blog/**` | `cute-gufo` | JWT | 100/min |
+| URL Shortener | `/api/short/**` | `fluffy-mouton` | JWT | 100/min |
+| Todo | `/api/todo/**` | `tiny-mchwa` | JWT | 100/min |
+| Ledger (Phase 2) | `/api/ledger/**` | `big-schwein` | JWT | 100/min |
+| Recipe (Phase 2) | `/api/recipe/**` | `shy-ardilla` | JWT | 100/min |
+| Hora (Phase 2) | `/api/hora/**` | `white-jelen` | JWT | 100/min |
 
-### Adding a Route
+`StripPrefix=1` removes `/api` before forwarding. `Authorization` header is stripped from upstream requests.
 
-```yaml
-spring:
-  cloud:
-    gateway:
-      routes:
-        - id: my-new-service
-          uri: lb://my-new-service
-          order: 25
-          predicates:
-            - Path=/api/v1/my-service/**
-          filters:
-            - StripPrefix=1
-            - RemoveRequestHeader=Authorization
-            - AddRequestHeader=X-Gateway-Route,my-new-service
-```
+---
+
+## Configuration
+
+### Profiles
+
+| File | Purpose |
+|------|---------|
+| `application.yaml` | Base config — routes, CORS, security, Redis, Eureka (disabled by default) |
+| `application-dev.yaml` | Local dev — localhost Keycloak, verbose logging |
+| `application-prod.yaml` | Production — env-var driven, JSON logging, Eureka enabled |
+
+### Key Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_PORT` | `8080` (dev) / `8000` (compose) | Gateway listen port |
+| `JWT_ISSUER_URI` | `https://auth.panomete.com/realms/panomete` | OAuth2 issuer |
+| `JWT_JWK_SET_URI` | `https://auth.panomete.com/realms/panomete/protocol/openid-connect/certs` | JWK Set endpoint |
+| `REDIS_HOST` | `local-valkey` (prod) / `localhost` (dev) | Valkey hostname |
+| `REDIS_PORT` | `6379` | Valkey port |
+| `REDIS_PASSWORD` | `${VALKEY_PASSWORD}` | Valkey auth password |
+| `EUREKA_CLIENT_ENABLED` | `true` (prod) / `false` (dev) | Enable service registration |
+| `EUREKA_URI` | `http://flowero-discover:8999/eureka` | Eureka server URL |
+| `CORS_ALLOWED_ORIGINS` | `https://*.panomete.com` | Allowed CORS origins |
+| `app.post-login-redirect-url` | *(required)* | Post-OAuth2-login redirect target |
 
 ---
 
 ## Endpoints
 
-### Application (port 8080)
-
-| Path | Description |
-|------|-------------|
-| `/api/v1/**` | Proxied to upstream services |
-| `/fallback/not-found` | Standardized 404 JSON |
-| `/fallback/{service}` | Circuit breaker fallback (503) |
-
-### Management (port 8081)
-
-| Path | Description |
-|------|-------------|
-| `/actuator/health` | Health check |
-| `/actuator/health/liveness` | K8s liveness probe |
-| `/actuator/health/readiness` | K8s readiness probe |
-| `/actuator/gateway/routes` | List all routes |
-| `/actuator/gateway/globalfilters` | List global filters |
-| `/actuator/gateway/routefilters` | List route filters |
-| `/actuator/gateway/refresh` | Reload routes (dynamic) |
-| `/actuator/prometheus` | Prometheus metrics scrape |
-| `/actuator/metrics` | Full metrics list |
+| Path | Auth | Description |
+|------|:---:|-------------|
+| `/actuator/health` | Public | Health check (liveness + readiness + Eureka + Valkey) |
+| `/actuator/health/liveness` | Public | K8s liveness probe |
+| `/actuator/health/readiness` | Public | K8s readiness probe |
+| `/actuator/gateway/routes` | Public | List all configured routes |
+| `/actuator/prometheus` | Public | Prometheus metrics scrape |
+| `/api/blog/**` | JWT | Blog API → `lb://cute-gufo` |
+| `/api/short/**` | JWT | URL Shortener → `lb://fluffy-mouton` |
+| `/api/todo/**` | JWT | Todo API → `lb://tiny-mchwa` |
+| `/fallback/not-found` | Public | Standardized 404 JSON |
+| `/fallback/{service}` | Public | Circuit breaker fallback (503) |
+| `/login/**` | Public | OAuth2 browser login redirect |
 
 ---
 
 ## Filters
 
-### Global Filters (apply to all routes)
+### Global
 
 | Filter | Order | Purpose |
-|--------|-------|---------|
-| `TraceIdFilter` | 0 | Generate W3C `traceparent` + `X-Trace-Id` |
-| Spring Security | ~10 | JWT validation, CSRF, path authorization |
-| `RequestLoggingFilter` | 5000 | Structured req/resp logging (no auth headers) |
+|--------|:---:|---------|
+| `TraceIdFilter` | 0 | W3C `traceparent` + `X-Trace-Id` |
+| Spring Security | ~10 | JWT validation, path authorization |
+| `RequestLoggingFilter` | 5000 | Structured JSON (method, path, status, latency) |
 | `RateLimitResponseFilter` | `HIGHEST_PRECEDENCE` | Custom JSON body on 429 |
 
-### Route Filters (per-route)
+### Route (per-route)
 
 | Filter | Usage |
 |--------|-------|
-| `StripPrefix` | Remove `/api/v1` before forwarding |
-| `AddRequestHeader` | Inject `X-Gateway-Route`, `X-User-Id` |
-| `RemoveRequestHeader` | Strip `Authorization` before upstream |
-| `RequestRateLimiter` | Redis-backed token bucket |
-| `CircuitBreaker` | Resilience4j — open on upstream failure |
-| `Retry` | 3 retries on `502/503/504` (GET only) |
-
----
-
-## Observability
-
-- **Traces**: OpenTelemetry SDK → W3C `traceparent` propagation → OTLP collector
-- **Metrics**: Micrometer → Prometheus (`/actuator/prometheus`) + OTLP
-- **Logs**: Structured JSON in prod (`traceId`, `routeId`, `method`, `path`, `status`, `latencyMs`)
-- **Health**: Liveness + Readiness probes for K8s
+| `StripPrefix=1` | Remove `/api` before forwarding |
+| `RemoveRequestHeader=Authorization` | Strip JWT before upstream |
+| `RequestRateLimiter` | Valkey-backed token bucket (fail-open) |
+| `JwtClaimHeaderFilter` | Extract JWT claims → `X-User-Id`, `X-User-Roles` headers |
 
 ---
 
@@ -223,22 +163,27 @@ spring:
 
 ```
 src/main/java/panomete/flowerogate/
-├── FlowerogateApplication.java        Entry point
+├── FlowerogateApplication.java          # Entry point
 ├── config/
-│   ├── SecurityConfig.java            SecurityWebFilterChain
-│   ├── GatewayConfig.java             Programmatic RouteLocator beans
-│   ├── CorsConfig.java                CORS fallback
-│   ├── RateLimiterConfig.java         KeyResolvers (principal, IP, API-key)
-│   ├── CircuitBreakerConfig.java      Resilience4j → Micrometer
-│   └── ObservabilityConfig.java       MeterFilter + @Observed
+│   ├── SecurityConfig.java              # OAuth2 Resource Server + OAuth2 Client
+│   ├── CorsConfig.java                  # CORS with wildcard origin patterns
+│   ├── GatewayConfig.java               # Route config
+│   ├── RateLimiterConfig.java           # Key resolvers (principal, IP, API key)
+│   ├── ResilientRedisRateLimiter.java   # Fail-open Valkey rate limiter
+│   ├── CircuitBreakerConfig.java        # Resilience4j
+│   └── ObservabilityConfig.java         # Micrometer common tags
 ├── filter/
-│   ├── TraceIdFilter.java             GlobalFilter — trace propagation
-│   ├── RequestLoggingFilter.java      GlobalFilter — structured logging
-│   └── RateLimitResponseFilter.java   WebFilter — custom 429 body
+│   ├── JwtClaimHeaderFilter.java        # JWT claims → downstream headers
+│   ├── TraceIdFilter.java               # W3C traceparent propagation
+│   ├── RequestLoggingFilter.java        # Structured JSON logging
+│   ├── RateLimitResponseFilter.java     # Standardized 429 JSON body
+│   ├── OAuth2RedirectParamFilter.java   # Post-login redirect URL
+│   └── SensitiveDataMasker.java         # Mask secrets in error logs
 ├── controller/
-│   └── FallbackController.java        /fallback/** endpoints
+│   ├── FallbackController.java          # 404 + circuit breaker fallbacks
+│   └── RateLimitAdminController.java    # Rate limit management
 └── exception/
-    └── GatewayExceptionHandler.java    WebExceptionHandler — global errors
+    └── GatewayExceptionHandler.java     # Global error handler
 ```
 
 ---
@@ -249,18 +194,37 @@ src/main/java/panomete/flowerogate/
 ./gradlew test
 ```
 
-Tests use `@SpringBootTest` with `WebTestClient` bound to a random port. Eureka and OTLP are disabled in test profiles. WireMock is available for upstream simulation.
+9 tests covering context load, route fallbacks, and JWT security enforcement (public endpoints, 401 without/invalid/expired token, valid JWT access).
 
 ---
 
-## Security Notes
+## Design Decisions
 
-- **CSRF**: Disabled — gateway APIs are stateless (JWT-based)
-- **Management port**: Actuator on 8081, not exposed externally
-- **Header stripping**: `Authorization` removed before forwarding to internal services
-- **Request size limit**: 10MB max (`spring.codec.max-in-memory-size`)
-- **Rate limiting**: First line of defense against DDoS
-- **mTLS**: Configure `spring.cloud.gateway.httpclient.ssl.*` for upstream mTLS (not configured by default)
+| ADR | Decision |
+|-----|----------|
+| ADR-W001 | Declarative route config in YAML — version-controlled |
+| ADR-W002 | Local JWT validation via cached JWKS — zero per-request calls to Keycloak |
+| ADR-W003 | Forward user claims as `X-User-Id`, `X-User-Roles` headers |
+| ADR-W004 | Path-based routing — `/api/{service}/**` |
+| ADR-W005 | Valkey-backed rate limiting — survives Gate restarts |
+| ADR-W006 | Internal-only gateway behind Nginx — no edge exposure |
+| ADR-W007 | No TLS at Gate — Cloudflare handles TLS termination |
+
+Full ADRs: [`spec/flowero_gate/02_design/021_architecture_decision_records.md`](../project_spec/spec/flowero_gate/02_design/021_architecture_decision_records.md)
+
+---
+
+## Platform Context
+
+| Service | Relationship |
+|---------|-------------|
+| **Flowero Guard** (Keycloak) | JWT issuer — Gate caches JWKS locally |
+| **Flowero Discover** (Eureka) | `lb://` route resolution |
+| **Cute Gufo** (Blog) | `/api/blog/**` → `lb://cute-gufo` |
+| **Fluffy Mouton** (URL) | `/api/short/**` → `lb://fluffy-mouton` |
+| **Tiny Mchwa** (Todo) | `/api/todo/**` → `lb://tiny-mchwa` |
+| **Valkey 9** | Shared rate limiting backend |
+| **Nginx + Cloudflare** | Edge proxy → `api.panomete.com` → Gate :8000 |
 
 ---
 
