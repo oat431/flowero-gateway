@@ -26,6 +26,9 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Compile
         run: ./gradlew compileJava -q
 
