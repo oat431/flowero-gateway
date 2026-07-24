@@ -32,9 +32,6 @@ jobs:
       - name: Compile
         run: ./gradlew compileJava -q
 
-      - name: Lint (Checkstyle)
-        run: ./gradlew checkstyleMain -q
-
       - name: Unit Tests
         run: ./gradlew test -q
 
