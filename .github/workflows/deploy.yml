@@ -1,0 +1,79 @@
+# Deploy — Manual trigger (workflow_dispatch)
+# Per PO decision DEC-007: deploy requires manual approval
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to Homelab
+    runs-on: ubuntu-latest
+    environment: homelab
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Connect to Tailscale (server is behind Tailnet) ──
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          auth-key: ${{ secrets.TS_AUTH_KEY }}
+          hostname: gh-actions-deploy-gate
+
+      # ── Deploy via SSH ──
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: remote.panomete.com
+          username: flowero
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          script: |
+            cd ~/platform
+            export IMAGE_TAG=${{ github.event.inputs.image_tag }}
+
+            # Pull latest image from GHCR
+            docker compose -f docker-compose.platform.yml pull flowero-gate
+
+            # Restart this service only
+            docker compose -f docker-compose.platform.yml up -d flowero-gate
+            sleep 15
+
+      # ── Smoke Test ──
+      - name: Smoke Test
+        uses: appleboy/ssh-action@v1
+        with:
+          host: remote.panomete.com
+          username: flowero
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          script: |
+            # Health check
+            curl -sf http://localhost:8000/actuator/health || exit 1
+
+            # Verify 401 rejection (auth active)
+            CODE=$(curl -sf -o /dev/null -w '%{http_code}' https://api.panomete.com/api/blog/posts)
+            [ "$CODE" = "401" ] || (echo "❌ Expected 401, got $CODE" && exit 1)
+
+            echo "✅ Gate healthy + auth active"
+
+      # ── Rollback on Failure ──
+      - name: Rollback on Failure
+        if: failure()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: remote.panomete.com
+          username: flowero
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          script: |
+            cd ~/platform
+            echo "⚠️ Deploy failed — manual rollback may be required"
+            echo "Previous image available at: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:<previous-sha>"
+            docker compose -f docker-compose.platform.yml ps flowero-gate
